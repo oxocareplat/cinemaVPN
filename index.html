@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CinemaVPN — Stream Without Borders</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --crt-green: #39ff14;
+      --crt-amber: #ffb000;
+      --crt-red: #ff0040;
+      --crt-blue: #00d4ff;
+      --bg-dark: #0a0a0f;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg-dark);
+      font-family: 'Share Tech Mono', monospace;
+      color: #e0e0e0;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ═══ TV LANDING ═══ */
+    .tv-container {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 70%);
+      perspective: 1200px;
+      z-index: 10;
+      transition: opacity 0.8s, transform 0.8s;
+    }
+
+    .tv-container.leaving {
+      opacity: 0; transform: scale(1.1); pointer-events: none;
+    }
+
+    .tv-set {
+      position: relative;
+      width: min(92vw, 1100px);
+      height: min(85vh, 680px);
+      transform-style: preserve-3d;
+      animation: tvBoot 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
+      transform: scale(0.85) rotateX(8deg);
+    }
+
+    .tv-set.shutting-down .tv-screen-wrap {
+      animation: tvShutdown 0.9s cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+
+    .tv-set.booting-up .tv-screen-wrap {
+      animation: tvPowerOn 1s cubic-bezier(0, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes tvBoot {
+      0%   { opacity: 0; transform: scale(0.7) rotateX(15deg); filter: brightness(3); }
+      30%  { opacity: 1; filter: brightness(2); }
+      60%  { filter: brightness(0.3); }
+      80%  { filter: brightness(1.5); }
+      100% { opacity: 1; transform: scale(1) rotateX(2deg); filter: brightness(1); }
+    }
+
+    @keyframes tvShutdown {
+      0%   { transform: scaleY(1); filter: brightness(1); }
+      40%  { transform: scaleY(0.004); filter: brightness(3); box-shadow: 0 0 40px #fff; }
+      70%  { transform: scaleY(0.004); filter: brightness(8); }
+      100% { transform: scaleY(0); filter: brightness(0); opacity: 0; }
+    }
+
+    @keyframes tvPowerOn {
+      0%   { transform: scaleY(0); filter: brightness(0); opacity: 0; }
+      30%  { transform: scaleY(0.004); filter: brightness(8); opacity: 1; box-shadow: 0 0 60px #fff; }
+      60%  { transform: scaleY(0.004); filter: brightness(3); }
+      100% { transform: scaleY(1); filter: brightness(1); opacity: 1; box-shadow: none; }
+    }
+
+    .tv-bezel {
+      position: absolute; inset: -18px;
+      border-radius: 24px;
+      background: linear-gradient(145deg, #2a2a3a, #111118);
+      box-shadow: 0 0 0 3px #333, 0 0 0 6px #1a1a22, 0 30px 80px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.08);
+    }
+
+    .tv-bezel::before {
+      content: 'CINEMAVPN';
+      position: absolute; bottom: -42px; left: 50%; transform: translateX(-50%);
+      font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 6px; color: #444;
+    }
+
+    .tv-screen-wrap {
+      position: relative; width: 100%; height: 100%;
+      border-radius: 12px; overflow: hidden; background: #000;
+      box-shadow: inset 0 0 60px rgba(0,0,0,0.9);
+      transform-origin: center center;
+    }
+
+    .tv-screen-wrap::after {
+      content: ''; position: absolute; inset: 0; border-radius: 12px;
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.6);
+      pointer-events: none; z-index: 20;
+    }
+
+    #static-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+
+    .scanlines {
+      position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px);
+      animation: scanlineScroll 8s linear infinite;
+    }
+
+    @keyframes scanlineScroll { 0% { background-position: 0 0; } 100% { background-position: 0 100px; } }
+
+    .crt-overlay {
+      position: absolute; inset: 0; z-index: 3; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
+      animation: crtFlicker 0.12s infinite alternate;
+    }
+
+    @keyframes crtFlicker { 0% { opacity: 0.97; } 50% { opacity: 1; } 100% { opacity: 0.94; } }
+
+    .rolling-bar {
+      position: absolute; left: 0; width: 100%; height: 6px;
+      background: rgba(255,255,255,0.06); z-index: 4; pointer-events: none;
+      animation: rollDown 4s linear infinite;
+    }
+
+    @keyframes rollDown { 0% { top: -6px; } 100% { top: 100%; } }
+
+    .noise-burst {
+      position: absolute; inset: 0; z-index: 5; background: #fff;
+      opacity: 0; pointer-events: none; animation: noiseBurst 0.15s 0.8s ease forwards;
+    }
+
+    @keyframes noiseBurst { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+
+    .channel-indicator {
+      position: absolute; top: 16px; right: 16px; z-index: 15;
+      font-family: 'Orbitron', sans-serif; font-size: 12px;
+      color: rgba(255,255,255,0.5); letter-spacing: 2px;
+    }
+
+    .login-corner {
+      position: absolute; top: 16px; left: 16px; z-index: 25;
+      background: transparent; border: 1px solid rgba(0,212,255,0.4);
+      color: var(--crt-blue); font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; letter-spacing: 2px; padding: 6px 14px;
+      cursor: pointer; text-transform: uppercase;
+      transition: all 0.3s; opacity: 0;
+      animation: fadeInBtn 0.6s 3s forwards;
+    }
+
+    .login-corner:hover {
+      background: rgba(0,212,255,0.1); box-shadow: 0 0 15px rgba(0,212,255,0.3);
+    }
+
+    @keyframes fadeInBtn { to { opacity: 1; } }
+
+    /* Landing content */
+    .content {
+      position: absolute; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 2rem;
+      animation: contentFadeIn 2s 1.2s ease forwards; opacity: 0;
+    }
+
+    .content.auth-mode { animation: none; opacity: 1; }
+
+    @keyframes contentFadeIn {
+      0% { opacity: 0; transform: scale(1.05); filter: blur(4px); }
+      100% { opacity: 1; transform: scale(1); filter: blur(0); }
+    }
+
+    .signal-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border: 1px solid rgba(255,0,64,0.5); border-radius: 2px;
+      font-size: 11px; letter-spacing: 3px; color: var(--crt-red);
+      text-transform: uppercase; margin-bottom: 1.5rem;
+      animation: badgePulse 2s ease-in-out infinite;
+    }
+
+    .signal-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--crt-red);
+      animation: dotBlink 1s step-end infinite;
+    }
+
+    @keyframes dotBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes badgePulse { 0%, 100% { box-shadow: 0 0 8px rgba(255,0,64,0.3); } 50% { box-shadow: 0 0 20px rgba(255,0,64,0.6); } }
+
+    .title-wrap { position: relative; margin-bottom: 0.5rem; }
+
+    .title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2rem, 7vw, 4.5rem);
+      font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #fff; position: relative;
+      text-shadow: 0 0 10px rgba(0,212,255,0.8), 0 0 40px rgba(0,212,255,0.4);
+      animation: titleGlow 3s ease-in-out infinite alternate;
+    }
+
+    .title::before, .title::after {
+      content: attr(data-text); position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    }
+
+    .title::before { color: var(--crt-red); animation: glitch1 3s infinite linear alternate-reverse; clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%); }
+    .title::after  { color: var(--crt-blue); animation: glitch2 2.5s infinite linear alternate-reverse; clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%); }
+
+    @keyframes glitch1 { 0%, 90%, 100% { transform: translate(0); } 92% { transform: translate(-4px, 2px); } 94% { transform: translate(4px, -1px); } }
+    @keyframes glitch2 { 0%, 88%, 100% { transform: translate(0); } 90% { transform: translate(3px, -2px); } 93% { transform: translate(-3px, 1px); } }
+    @keyframes titleGlow { 0% { text-shadow: 0 0 10px rgba(0,212,255,0.8); } 100% { text-shadow: 0 0 20px rgba(0,212,255,1), 0 0 60px rgba(0,212,255,0.6); } }
+
+    .tagline {
+      font-size: clamp(0.7rem, 2vw, 0.9rem); letter-spacing: 0.35em;
+      color: var(--crt-amber); text-transform: uppercase; margin-bottom: 2rem;
+      opacity: 0; animation: taglineIn 1s 2s ease forwards;
+    }
+
+    @keyframes taglineIn { from { opacity: 0; letter-spacing: 0.6em; } to { opacity: 0.85; letter-spacing: 0.35em; } }
+
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px; max-width: 720px; width: 100%; margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(0,212,255,0.2);
+      padding: 12px 10px; border-radius: 4px; backdrop-filter: blur(4px);
+      opacity: 0; transform: translateY(20px);
+      animation: statSlideUp 0.6s ease forwards;
+    }
+
+    .stat-card:nth-child(1) { animation-delay: 2.3s; }
+    .stat-card:nth-child(2) { animation-delay: 2.5s; }
+    .stat-card:nth-child(3) { animation-delay: 2.7s; }
+    .stat-card:nth-child(4) { animation-delay: 2.9s; }
+    .stat-card:nth-child(5) { animation-delay: 3.1s; }
+    .stat-card:nth-child(6) { animation-delay: 3.3s; }
+
+    @keyframes statSlideUp { to { opacity: 1; transform: translateY(0); } }
+
+    .stat-label { font-size: 8px; letter-spacing: 2px; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+    .stat-value { font-family: 'Orbitron', sans-serif; font-size: clamp(0.9rem, 2.5vw, 1.3rem); font-weight: 700; color: var(--crt-green); }
+    .stat-value.amber { color: var(--crt-amber); }
+    .stat-value.blue  { color: var(--crt-blue); }
+    .stat-value.red   { color: var(--crt-red); }
+    .stat-value .unit { font-size: 0.55em; opacity: 0.7; }
+
+    .action-btn {
+      position: relative; padding: 14px 48px;
+      font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700;
+      letter-spacing: 4px; text-transform: uppercase; color: #000;
+      background: linear-gradient(135deg, var(--crt-green), #20cc00);
+      border: none; border-radius: 2px; cursor: pointer;
+      opacity: 0; animation: btnAppear 0.8s 3.5s ease forwards;
+      overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .action-btn::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      transform: translateX(-100%); animation: btnShine 3s 4s ease infinite;
+    }
+
+    @keyframes btnShine { 0% { transform: translateX(-100%); } 50% { transform: translateX(100%); } 100% { transform: translateX(100%); } }
+    @keyframes btnAppear { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+
+    .action-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(57,255,20,0.5); }
+    .action-btn:active { transform: scale(0.97); }
+
+    .tv-knob {
+      position: absolute; width: 28px; height: 28px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #555, #222);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+
+    .tv-knob.left  { bottom: -50px; left: 30px; }
+    .tv-knob.right { bottom: -50px; right: 30px; }
+
+    /* ═══ AUTH FORM (inside TV) ═══ */
+    .auth-panel {
+      position: absolute; inset: 0; z-index: 12;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 2rem; opacity: 0; pointer-events: none;
+      background: rgba(0,0,0,0.9);
+      transition: opacity 0.5s;
+    }
+
+    .auth-panel.visible { opacity: 1; pointer-events: all; }
+
+    .auth-panel h2 {
+      font-family: 'Orbitron', sans-serif; font-size: 1.4rem;
+      letter-spacing: 4px; margin-bottom: 1.5rem; color: var(--crt-blue);
+    }
+
+    .auth-form { width: min(340px, 90%); }
+
+    .form-group { margin-bottom: 1rem; text-align: left; }
+
+    .form-group label {
+      display: block; font-size: 10px; letter-spacing: 2px;
+      color: #888; text-transform: uppercase; margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%; padding: 10px 14px;
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 3px; color: #fff; font-family: 'Share Tech Mono', monospace;
+      font-size: 14px; outline: none; transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .form-group input:focus {
+      border-color: var(--crt-blue);
+      box-shadow: 0 0 12px rgba(0,212,255,0.2);
+    }
+
+    .validation-lines { margin-top: 8px; }
+
+    .val-line {
+      font-size: 10px; letter-spacing: 1px; padding: 3px 0;
+      color: #555; transition: color 0.3s;
+    }
+
+    .val-line.pass { color: var(--crt-green); }
+    .val-line.fail { color: var(--crt-red); }
+
+    .val-line::before { content: '○ '; }
+    .val-line.pass::before { content: '✓ '; }
+    .val-line.fail::before { content: '✗ '; }
+
+    .auth-submit {
+      width: 100%; margin-top: 1rem; padding: 12px;
+      font-family: 'Orbitron', sans-serif; font-size: 12px;
+      letter-spacing: 3px; font-weight: 700; text-transform: uppercase;
+      background: linear-gradient(135deg, var(--crt-blue), #0099cc);
+      border: none; color: #000; cursor: pointer; border-radius: 2px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .auth-submit:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+    .auth-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .auth-switch {
+      margin-top: 1rem; font-size: 11px; color: #666; cursor: pointer;
+      letter-spacing: 1px; transition: color 0.3s;
+    }
+
+    .auth-switch:hover { color: var(--crt-amber); }
+    .auth-error { color: var(--crt-red); font-size: 11px; margin-top: 0.5rem; min-height: 16px; }
+
+    /* ═══ ADDED: UPGRADE / PRICING PLAN MODULE ═══ */
+    .plans-container {
+      display: flex; gap: 20px; width: 100%; max-width: 680px; justify-content: center; margin-bottom: 1.5rem;
+    }
+    .plan-card {
+      background: rgba(10, 10, 15, 0.85); border: 1px solid rgba(255,255,255,0.1);
+      padding: 16px; border-radius: 6px; flex: 1; text-align: left; position: relative;
+    }
+    .plan-card.premium-tier {
+      border-color: var(--crt-amber); box-shadow: 0 0 15px rgba(255,176,0,0.15);
+    }
+    .plan-title { font-family: 'Orbitron', sans-serif; font-size: 1rem; letter-spacing: 2px; margin-bottom: 8px; }
+    .plan-card.premium-tier .plan-title { color: var(--crt-amber); }
+    .plan-price { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: bold; margin-bottom: 12px; }
+    .plan-features-list { list-style: none; font-size: 11px; line-height: 1.8; margin-bottom: 1rem; }
+    .plan-features-list li.check { color: var(--crt-green); }
+    .plan-features-list li.cross { color: var(--crt-red); opacity: 0.6; }
+    .plan-actions { display: flex; justify-content: space-between; gap: 10px; width: 100%; max-width: 400px; }
+    .plan-btn-no { background: transparent; border: 1px solid #444; color: #888; padding: 10px 20px; font-size: 11px; cursor: pointer; font-family: 'Orbitron'; letter-spacing: 1px; }
+    .plan-btn-no:hover { color: #fff; border-color: #aaa; }
+    .plan-btn-yes { background: var(--crt-amber); border: none; color: #000; padding: 10px 24px; font-size: 11px; cursor: pointer; font-family: 'Orbitron'; font-weight: bold; letter-spacing: 2px; flex: 1; text-transform: uppercase;}
+    .plan-btn-yes:hover { box-shadow: 0 0 15px rgba(255,176,0,0.4); }
+
+    /* ═══ ADDED: POPCORN CANVAS OVERLAY ═══ */
+    #popcorn-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%; z-index: 99; pointer-events: none; background: transparent;
+      transition: transform 1.2s ease-in, filter 1.2s ease; transform-origin: center center;
+    }
+    #popcorn-canvas.zoomed { transform: scale(15); filter: blur(4px); opacity: 0; }
+
+    /* ═══ ADDED: PAYPAL/CHECKOUT PANEL ═══ */
+    .checkout-badge { font-size: 10px; background: #003087; color: #009cde; font-weight: bold; padding: 4px 8px; border-radius: 3px; display: inline-block; margin-bottom: 12px; font-family: sans-serif; letter-spacing: 0; text-transform: none; }
+    .form-row { display: flex; gap: 10px; }
+
+    /* ═══ DASHBOARD ═══ */
+    .dashboard {
+      position: fixed; inset: 0; z-index: 50;
+      background: radial-gradient(ellipse at 50% 30%, #12121f 0%, #050508 60%);
+      opacity: 0; pointer-events: none;
+      transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+
+    .dashboard.active { opacity: 1; pointer-events: all; }
+
+    .dashboard::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 50%, transparent 30%, rgba(0,0,0,0.7) 100%);
+      pointer-events: none; z-index: 2;
+    }
+
+    .dash-header {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 20px 32px;
+      animation: dashSlideDown 0.8s 0.3s ease both;
+    }
+
+    @keyframes dashSlideDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+
+    .dash-logo {
+      font-family: 'Orbitron', sans-serif; font-size: 1.1rem;
+      letter-spacing: 4px; color: var(--crt-blue);
+      text-shadow: 0 0 20px rgba(0,212,255,0.4);
+    }
+
+    .dash-user {
+      font-size: 11px; letter-spacing: 2px; color: #666;
+    }
+
+    .dash-user span { color: var(--crt-green); }
+
+    /* Slogan ticker */
+    .slogan-wrap {
+      position: absolute; top: 70px; left: 0; right: 0; z-index: 10;
+      overflow: hidden; height: 36px;
+      animation: dashFadeIn 0.8s 0.6s ease both;
+    }
+
+    @keyframes dashFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .slogan-track {
+      display: flex; gap: 60px;
+      animation: sloganScroll 30s linear infinite;
+      white-space: nowrap;
+    }
+
+    @keyframes sloganScroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .slogan-item {
+      font-family: 'Orbitron', sans-serif; font-size: 12px;
+      letter-spacing: 3px; color: rgba(255,255,255,0.35);
+      text-transform: uppercase; flex-shrink: 0;
+    }
+
+    .slogan-item em { color: var(--crt-amber); font-style: normal; }
+
+    /* Planet area */
+    .planet-area {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1;
+    }
+
+    #planet-canvas {
+      transition: transform 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      filter: drop-shadow(0 0 40px rgba(255,255,255,0.08));
+    }
+
+    #planet-canvas.zoomed {
+      transform: scale(2.8);
+    }
+
+    .server-pointer {
+      position: absolute; z-index: 5;
+      width: 20px; height: 20px;
+      transform: translate(-50%, -50%);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.5s;
+    }
+
+    .server-pointer.visible { opacity: 1; }
+
+    .server-pointer::before {
+      content: ''; position: absolute; inset: 0;
+      border: 2px solid var(--crt-red); border-radius: 50%;
+      animation: pointerPulse 1.5s ease infinite;
+    }
+
+    .server-pointer::after {
+      content: ''; position: absolute;
+      top: 50%; left: 50%; width: 6px; height: 6px;
+      background: var(--crt-red); border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px var(--crt-red);
+    }
+
+    @keyframes pointerPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.8); opacity: 0.3; }
+    }
+
+    /* Status banner */
+    .status-banner {
+      position: absolute; bottom: 180px; left: 50%; transform: translateX(-50%);
+      z-index: 10; text-align: center;
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(0.75rem, 2vw, 1rem);
+      letter-spacing: 4px; color: var(--crt-green);
+      text-shadow: 0 0 20px rgba(57,255,20,0.5);
+      opacity: 0; transition: opacity 0.5s, transform 0.5s;
+      min-height: 24px;
+    }
+
+    .status-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .status-banner.hide { opacity: 0; transform: translateX(-50%) translateY(10px); }
+
+    /* IP panel */
+    .ip-panel {
+      position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
+      z-index: 10; text-align: center;
+      padding: 10px 24px; border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 4px; background: rgba(0,0,0,0.5);
+      opacity: 0; transition: opacity 0.6s;
+      animation: dashFadeIn 0.8s 1s ease both;
+    }
+
+    .ip-panel.visible { opacity: 1; }
+
+    .ip-panel .ip-label { font-size: 9px; letter-spacing: 3px; color: #666; margin-bottom: 4px; }
+    .ip-panel .ip-value {
+      font-family: 'Orbitron', sans-serif; font-size: 1rem;
+      color: var(--crt-blue); letter-spacing: 2px;
+    }
+
+    .ip-panel .server-name {
+      font-size: 10px; color: var(--crt-amber); margin-top: 4px; letter-spacing: 2px;
+    }
+
+    /* Control buttons */
+    .dash-controls {
+      position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+      z-index: 10; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;
+      animation: dashSlideUp 0.8s 0.9s ease both;
+    }
+
+    @keyframes dashSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    .dash-btn {
+      padding: 14px 32px; font-family: 'Orbitron', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; border: none; border-radius: 2px;
+      cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s;
+      position: relative; overflow: hidden;
+    }
+
+    .dash-btn.primary {
+      background: linear-gradient(135deg, var(--crt-green), #20cc00); color: #000;
+    }
+
+    .dash-btn.danger {
+      background: linear-gradient(135deg, var(--crt-red), #cc0033); color: #fff;
+    }
+
+    .dash-btn.secondary {
+      background: transparent; color: var(--crt-blue);
+      border: 1px solid rgba(0,212,255,0.4);
+    }
+
+    .dash-btn:hover:not(:disabled) { transform: scale(1.05); }
+    .dash-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .dash-btn.primary:hover:not(:disabled) { box-shadow: 0 0 25px rgba(57,255,20,0.4); }
+    .dash-btn.danger:hover:not(:disabled)  { box-shadow: 0 0 25px rgba(255,0,64,0.4); }
+    .dash-btn.secondary:hover:not(:disabled) { box-shadow: 0 0 20px rgba(0,212,255,0.2); }
+
+    .cooldown-label {
+      position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+      font-size: 8px; letter-spacing: 1px; color: #555; white-space: nowrap;
+    }
+
+    /* ═══ ADDED: CUSTOM PREMIUM SERVER SELECTION DROPDOWN MODAL ═══ */
+    .premium-server-modal {
+      position: absolute; inset: 0; background: rgba(5,5,10,0.95); z-index: 100;
+      display: flex; flex-direction: column; padding: 2rem; overflow-y: auto;
+    }
+    .premium-server-header { font-family: 'Orbitron'; font-size: 1.2rem; color: var(--crt-amber); margin-bottom: 1rem; text-align: center; letter-spacing: 3px; }
+    .server-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
+    .server-item-btn { background: #161622; border: 1px solid rgba(255,176,0,0.2); color: #fff; padding: 10px; font-family: 'Share Tech Mono'; font-size: 12px; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; }
+    .server-item-btn:hover { background: rgba(255,176,0,0.15); border-color: var(--crt-amber); }
+
+    /* VPN loading overlay */
+    .vpn-loader {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.92);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.4s;
+    }
+
+    .vpn-loader.active { opacity: 1; pointer-events: all; }
+
+    .loader-ring {
+      width: 100px; height: 100px; position: relative; margin-bottom: 2rem;
+    }
+
+    .loader-ring span {
+      position: absolute; inset: 0;
+      border: 2px solid transparent; border-top-color: var(--crt-green);
+      border-radius: 50%; animation: spinRing 1s linear infinite;
+    }
+
+    .loader-ring span:nth-child(2) {
+      inset: 10px; border-top-color: var(--crt-blue);
+      animation-duration: 0.7s; animation-direction: reverse;
+    }
+
+    .loader-ring span:nth-child(3) {
+      inset: 20px; border-top-color: var(--crt-amber);
+      animation-duration: 1.3s;
+    }
+
+    @keyframes spinRing { to { transform: rotate(360deg); } }
+
+    .loader-text {
+      font-family: 'Orbitron', sans-serif; font-size: 1rem;
+      letter-spacing: 6px; color: var(--crt-green);
+      animation: loadPulse 1s ease infinite;
+    }
+
+    @keyframes loadPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .loader-bars {
+      display: flex; gap: 4px; margin-top: 1.5rem;
+    }
+
+    .loader-bars div {
+      width: 4px; height: 30px; background: var(--crt-green);
+      animation: barBounce 0.8s ease infinite;
+    }
+
+    .loader-bars div:nth-child(2) { animation-delay: 0.1s; background: var(--crt-blue); }
+    .loader-bars div:nth-child(3) { animation-delay: 0.2s; }
+    .loader-bars div:nth-child(4) { animation-delay: 0.3s; background: var(--crt-amber); }
+    .loader-bars div:nth-child(5) { animation-delay: 0.4s; }
+
+    @keyframes barBounce {
+      0%, 100% { transform: scaleY(0.3); }
+      50% { transform: scaleY(1); }
+    }
+
+    /* Info cards on dashboard sides */
+    .info-cards {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      z-index: 10; display: flex; flex-direction: column; gap: 12px;
+      animation: dashFadeIn 1s 1.2s ease both;
+    }
+
+    .info-cards.left  { left: 24px; }
+    .info-cards.right { right: 24px; text-align: right; }
+
+    .info-card {
+      padding: 10px 16px; border-left: 2px solid rgba(0,212,255,0.3);
+      background: rgba(0,0,0,0.4); max-width: 200px;
+    }
+
+    .info-cards.right .info-card { border-left: none; border-right: 2px solid rgba(57,255,20,0.3); }
+
+    .info-card .ic-title { font-size: 8px; letter-spacing: 2px; color: #555; margin-bottom: 4px; }
+    .info-card .ic-val   { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: #ccc; }
+
+    @media (max-width: 768px) {
+      .info-cards { display: none; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .dash-controls { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="tv-container" id="tv-container">
+    <div class="tv-set" id="tv-set">
+      <div class="tv-bezel"></div>
+      <div class="tv-knob left"></div>
+      <div class="tv-knob right"></div>
+
+      <div class="tv-screen-wrap" id="tv-screen">
+        <canvas id="static-canvas"></canvas>
+        <canvas id="popcorn-canvas" class="hidden"></canvas>
+        <div class="scanlines" id="scanlines"></div>
+        <div class="crt-overlay"></div>
+        <div class="rolling-bar" id="rolling-bar"></div>
+        <div class="noise-burst"></div>
+        <div class="channel-indicator" id="channel-ind">CH 07</div>
+        <button class="login-corner" id="login-corner-btn">Login</button>
+
+        <div class="content" id="landing-content">
+          <div class="signal-badge"><span class="dot"></span> No Signal — Searching Stream</div>
+          <div class="title-wrap"><h1 class="title" data-text="CinemaVPN">CinemaVPN</h1></div>
+          <p class="tagline">Encrypted Cinema Access Protocol</p>
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Live Now</div><div class="stat-value" id="live-count">---</div></div>
+            <div class="stat-card"><div class="stat-label">Active Servers</div><div class="stat-value blue" id="servers">---</div></div>
+            <div class="stat-card"><div class="stat-label">Avg Speed</div><div class="stat-value amber" id="speed">---</div></div>
+            <div class="stat-card"><div class="stat-label">Countries</div><div class="stat-value" id="countries">---</div></div>
+            <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value blue" id="uptime">---</div></div>
+            <div class="stat-card"><div class="stat-label">Threats Blocked</div><div class="stat-value red" id="threats">---</div></div>
+          </div>
+          <button class="action-btn" id="signup-btn">Sign Up</button>
+        </div>
+
+        <div class="auth-panel" id="signup-panel">
+          <h2>CREATE ACCOUNT</h2>
+          <div class="auth-form">
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" id="su-username" autocomplete="off" placeholder="pick a handle">
+              <div class="validation-lines">
+                <div class="val-line" id="val-available">Username is available</div>
+                <div class="val-line" id="val-appropriate">Username is appropriate</div>
+                <div class="val-line" id="val-length">Username is at least 5 characters</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="su-password" placeholder="min 8 characters">
+              <div class="validation-lines">
+                <div class="val-line" id="val-pass">Password is at least 8 characters</div>
+              </div>
+            </div>
+            <button class="auth-submit" id="su-submit" disabled>Create Account</button>
+            <div class="auth-error" id="su-error"></div>
+            <div class="auth-switch" id="su-to-login">Already have an account? Login</div>
+          </div>
+        </div>
+
+        <div class="auth-panel" id="login-panel">
+          <h2>WELCOME BACK</h2>
+          <div class="auth-form">
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" id="li-username" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="li-password">
+            </div>
+            <button class="auth-submit" id="li-submit">Login</button>
+            <div class="auth-error" id="li-error"></div>
+            <div class="auth-switch" id="li-to-signup">Need an account? Sign Up</div>
+          </div>
+        </div>
+
+        <div class="auth-panel" id="premium-prompt-panel">
+          <h2>SELECT STREAMING MEMBERSHIP</h2>
+          <div class="plans-container">
+            <div class="plan-card">
+              <div class="plan-title">FREE PROTOCOL</div>
+              <div class="plan-price">$0<span style="font-size:10px; color:#777">/mo</span></div>
+              <ul class="plan-features-list">
+                <li class="check">✓ Basic Node Encryption</li>
+                <li class="check">✓ Standard Speed Limits</li>
+                <li class="cross">✗ No Premium Custom Nodes</li>
+                <li class="cross">✗ 15-Minute Reconnect Cooldown</li>
+                <li class="cross">✗ Slow 30-Second Buffer Tuning</li>
+              </ul>
+            </div>
+            <div class="plan-card premium-tier">
+              <div class="plan-title">PREMIUM CINEMA</div>
+              <div class="plan-price" style="color: var(--crt-amber)">$15<span style="font-size:10px; color:#777">/mo</span></div>
+              <ul class="plan-features-list">
+                <li class="check">✓ Advanced Stealth Encryption</li>
+                <li class="check">✓ Instant Multi-Thread Speeds</li>
+                <li class="check">✓ Unlock 50+ Custom Server List</li>
+                <li class="check">✓ 0s Connection Cooldown Bypass</li>
+                <li class="check">✓ Hyper-Speed 3x Faster Connect</li>
+              </ul>
+            </div>
+          </div>
+          <div class="plan-actions">
+            <button class="plan-btn-no" id="plan-decline-btn">NO, THANK YOU</button>
+            <button class="plan-btn-yes" id="plan-accept-btn">I'M INTERESTED</button>
+          </div>
+        </div>
+
+        <div class="auth-panel" id="checkout-panel">
+          <h2>SECURE PROTOCOL GATEWAY</h2>
+          <div class="checkout-badge">PayPal Only Accepted</div>
+          <div class="auth-form">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" id="pay-email" placeholder="user@domain.com">
+            </div>
+            <div class="form-group">
+              <label>Fake Card Holder Name</label>
+              <input type="text" id="pay-name" placeholder="John Doe">
+            </div>
+            <div class="form-group">
+              <label>Fake Card Number</label>
+              <input type="text" id="pay-card" placeholder="4242 •••• •••• 4242">
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="flex:1">
+                <label>Expiration Date</label>
+                <input type="text" id="pay-exp" placeholder="MM/YY">
+              </div>
+              <div class="form-group" style="flex:1">
+                <label>CVV Code</label>
+                <input type="password" id="pay-cvv" placeholder="•••">
+              </div>
+            </div>
+            <button class="auth-submit" id="pay-submit-btn" style="background:linear-gradient(135deg, var(--crt-amber), #cc8800)">PURCHASE PREMIUM PLAN</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard" id="dashboard">
+    <div class="dash-header">
+      <div class="dash-logo">CINEMAVPN</div>
+      <div class="dash-user">OPERATOR: <span id="dash-username">---</span> <span id="premium-badge" style="color:var(--crt-amber); margin-left:8px; font-weight:bold; display:none">[PREMIUM ACTIVE]</span></div>
+    </div>
+
+    <div class="slogan-wrap">
+      <div class="slogan-track" id="slogan-track"></div>
+    </div>
+
+    <div class="info-cards left">
+      <div class="info-card"><div class="ic-title">ENCRYPTION</div><div class="ic-val" id="info-encryption">AES-256-GCM</div></div>
+      <div class="info-card"><div class="ic-title">PROTOCOL</div><div class="ic-val">WireGuard Cinema</div></div>
+      <div class="info-card"><div class="ic-title">DNS LEAK</div><div class="ic-val">Protected</div></div>
+    </div>
+
+    <div class="info-cards right">
+      <div class="info-card"><div class="ic-title">STREAM QUALITY</div><div class="ic-val">4K HDR Ready</div></div>
+      <div class="info-card"><div class="ic-title">LATENCY</div><div class="ic-val" id="info-latency">--- ms</div></div>
+      <div class="info-card"><div class="ic-title">BANDWIDTH</div><div class="ic-val" id="info-bw">--- Mbps</div></div>
+    </div>
+
+    <div class="planet-area">
+      <canvas id="planet-canvas" width="400" height="400"></canvas>
+      <div class="server-pointer" id="server-pointer"></div>
+    </div>
+
+    <div class="status-banner" id="status-banner"></div>
+
+    <div class="ip-panel" id="ip-panel">
+      <div class="ip-label" id="ip-protection-status">YOUR SECURED IP</div>
+      <div class="ip-value" id="secured-ip">---.---.---.---</div>
+      <div class="server-name" id="server-label">Server: ---</div>
+    </div>
+
+    <div class="dash-controls">
+      <button class="dash-btn primary" id="start-movie-btn">Start Movie</button>
+      <button class="dash-btn danger hidden" id="stop-vpn-btn">Stop VPN</button>
+      <div style="position:relative">
+        <button class="dash-btn secondary hidden" id="change-server-btn">Change Server</button>
+        <div class="cooldown-label hidden" id="cooldown-label"></div>
+      </div>
+      <button class="dash-btn secondary hidden" id="custom-servers-trigger" style="border-color:var(--crt-amber); color:var(--crt-amber)">Custom Servers</button>
+    </div>
+
+    <div class="premium-server-modal hidden" id="premium-server-modal">
+      <div class="premium-server-header">SELECT CUSTOM PREMIUM NODE</div>
+      <button class="dash-btn danger" id="close-premium-modal" style="margin: 0 auto 1.5rem auto; padding:8px 20px">CLOSE NODES LIST</button>
+      <div class="server-list-grid" id="server-list-grid"></div>
+    </div>
+  </div>
+
+  <div class="vpn-loader" id="vpn-loader">
+    <div class="loader-ring"><span></span><span></span><span></span></div>
+    <div class="loader-text" id="loader-text">INITIALIZING...</div>
+    <div class="loader-bars"><div></div><div></div><div></div><div></div><div></div></div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════
+    //  UTILITIES
+    // ═══════════════════════════════════════════
+    const $ = id => document.getElementById(id);
+    const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+    const fmt  = n => n.toLocaleString();
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    const BAD_WORDS = ['fuck','shit','ass','damn','bitch','dick','cock','pussy','cunt','nigger','faggot','retard','penis','vagina','porn','xxx','nazi','hitler','kill','death','666','admin','root','null','undefined','test123','asdf'];
+    const WEIRD_PATTERN = /[^a-zA-Z0-9_]/;
+
+    // Premium Variable Track
+    let isPremiumAccount = false;
+    let pendingUsername = "Operator";
+
+    const SERVERS = [
+      { name: 'Tokyo, JP',       lat: 35.68,  lon: 139.69 },
+      { name: 'New York, US',    lat: 40.71,  lon: -74.01 },
+      { name: 'London, UK',      lat: 51.51,  lon: -0.13  },
+      { name: 'Sydney, AU',      lat: -33.87, lon: 151.21 },
+      { name: 'Berlin, DE',      lat: 52.52,  lon: 13.41  },
+      { name: 'São Paulo, BR',   lat: -23.55, lon: -46.63 },
+      { name: 'Singapore, SG',   lat: 1.35,   lon: 103.82 },
+      { name: 'Paris, FR',       lat: 48.86,  lon: 2.35   },
+      { name: 'Toronto, CA',     lat: 43.65,  lon: -79.38 },
+      { name: 'Mumbai, IN',      lat: 19.08,  lon: 72.88  },
+    ];
+
+    // Generate 50 Random Premium Custom Server Pools
+    const PREMIUM_FLAGS = ["🇺🇸", "🇬🇧", "🇨🇦", "🇦🇺", "🇩🇪", "🇫🇷", "🇯🇵", "🇳🇱", "🇸🇬", "🇧🇷", "🇨🇭", "🇸🇪", "🇮🇹", "🇪🇸", "🇿🇦", "🇰🇷"];
+    const PREMIUM_CITY_NAMES = ["Neo-City", "Cyber-Hub", "Alpha-Base", "Quantum-Grid", "Delta-Proxy", "Stealth-Node", "Matrix-Relay", "Nexus-Core", "Sovereign-Link"];
+    const EXTENDED_PREMIUM_SERVERS = [];
+    for(let i=1; i<=50; i++) {
+       let flag = PREMIUM_FLAGS[rand(0, PREMIUM_FLAGS.length - 1)];
+       let city = PREMIUM_CITY_NAMES[rand(0, PREMIUM_CITY_NAMES.length - 1)];
+       EXTENDED_PREMIUM_SERVERS.push({
+          name: `${flag} Node-${i} [${city}]`,
+          lat: rand(-55, 65),
+          lon: rand(-120, 140)
+       });
+    }
+
+    const SLOGANS = [
+      'Stream in stealth, <em>watch with zeal</em>',
+      'Your screen, your scene, <em>totally unseen</em>',
+      'No geo-block can hold, <em>your story unfolds</em>',
+      'Encrypt the frame, <em>cinema without shame</em>',
+      'Popcorn ready, <em>connection steady</em>',
+      'From Tokyo to Rome, <em>stream from home</em>',
+      'Pixels protected, <em>content unrestricted</em>',
+      'Lights dim low, <em>through VPN you go</em>',
+      'Buffer no more, <em>open every door</em>',
+      'The reel spins free, <em>across every sea</em>',
+    ];
+
+    function getUsers() {
+      try { return JSON.parse(localStorage.getItem('cinemavpn_users') || '{}'); }
+      catch { return {}; }
+    }
+
+    function saveUser(name, pass) {
+      const u = getUsers();
+      u[name.toLowerCase()] = { password: pass, display: name };
+      localStorage.setItem('cinemavpn_users', JSON.stringify(u));
+    }
+
+    function genIP() {
+      return `${rand(10,223)}.${rand(0,255)}.${rand(0,255)}.${rand(1,254)}`;
+    }
+
+    // ═══════════════════════════════════════════
+    //  TV STATIC
+    // ═══════════════════════════════════════════
+    const canvas = $('static-canvas');
+    const ctx = canvas.getContext('2d');
+    let staticRunning = true;
+    let staticId;
+
+    function resizeStatic() {
+      const w = canvas.parentElement;
+      canvas.width = w.clientWidth;
+      canvas.height = w.clientHeight;
+    }
+
+    function drawStatic() {
+      if (!staticRunning) return;
+      const w = canvas.width, h = canvas.height;
+      const img = ctx.createImageData(w, h);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = Math.random() * 255 | 0;
+        d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      if (Math.random() < 0.04) {
+        const y = Math.random() * h | 0, th = rand(2, 10), off = rand(-20, 20);
+        ctx.drawImage(canvas, 0, y, w, th, off, y, w, th);
+      }
+      staticId = requestAnimationFrame(drawStatic);
+    }
+
+    resizeStatic();
+    drawStatic();
+    window.addEventListener('resize', resizeStatic);
+
+    // Stats variables
+    let totalThreatsCounter = rand(12000, 89000);
+    $('live-count').textContent = fmt(rand(100, 1000));
+    $('servers').textContent    = rand(42, 128);
+    $('speed').innerHTML        = rand(850, 999) + '<span class="unit"> Mbps</span>';
+    $('countries').textContent  = rand(60, 94);
+    $('uptime').innerHTML       = (99.7 + Math.random() * 0.29).toFixed(2) + '<span class="unit">%</span>';
+    $('threats').textContent    = fmt(totalThreatsCounter);
+
+    setInterval(() => {
+      const el = $('live-count');
+      const c = parseInt(el.textContent.replace(/,/g,''), 10);
+      el.textContent = fmt(Math.max(100, Math.min(1000, c + rand(-3, 5))));
+    }, 3000);
+
+    // Baseline Threat Increment Engine
+    setInterval(() => {
+      totalThreatsCounter += rand(1, 12);
+      $('threats').textContent = fmt(totalThreatsCounter);
+    }, 2000);
+
+    // Dynamic Live Threat Dashboard Injector (Triggers every 10 seconds once dashboard active)
+    setInterval(() => {
+      if($('dashboard').classList.contains('active')) {
+         totalThreatsCounter += 1;
+         $('threats').textContent = fmt(totalThreatsCounter);
+         const currentSecuredBanner = $('status-banner').textContent;
+         if(!$('status-banner').classList.contains('show')) {
+            showStatus(`THREAT INTERCEPTED! TOTAL MALWARE BLOCKED: ${totalThreatsCounter}`);
+            setTimeout(hideStatus, 4000);
+         }
+      }
+    }, 10,000);
+
+    // ═══════════════════════════════════════════
+    //  TV SHUTDOWN / BOOT + AUTH
+    // ═══════════════════════════════════════════
+    const tvSet     = $('tv-set');
+    const tvScreen  = $('tv-screen');
+    const landing   = $('landing-content');
+    const signupPanel = $('signup-panel');
+    const loginPanel  = $('login-panel');
+
+    function hideStaticElements() {
+      canvas.style.opacity = '0';
+      $('scanlines').style.opacity = '0';
+      $('rolling-bar').style.opacity = '0';
+    }
+
+    function showStaticElements() {
+      canvas.style.opacity = '1';
+      $('scanlines').style.opacity = '1';
+      $('rolling-bar').style.opacity = '1';
+    }
+
+    async function tvShutdownThenShow(panel) {
+      tvSet.classList.add('shutting-down');
+      staticRunning = false;
+      cancelAnimationFrame(staticId);
+      await sleep(900);
+
+      landing.classList.add('hidden');
+      signupPanel.classList.remove('visible');
+      loginPanel.classList.remove('visible');
+      $('premium-prompt-panel').classList.remove('visible');
+      $('checkout-panel').classList.remove('visible');
+      hideStaticElements();
+
+      tvSet.classList.remove('shutting-down');
+      tvSet.classList.add('booting-up');
+      await sleep(200);
+
+      panel.classList.add('visible');
+      await sleep(1000);
+      tvSet.classList.remove('booting-up');
+    }
+
+    $('signup-btn').addEventListener('click', () => tvShutdownThenShow(signupPanel));
+    $('login-corner-btn').addEventListener('click', () => tvShutdownThenShow(loginPanel));
+
+    $('su-to-login').addEventListener('click', () => {
+      signupPanel.classList.remove('visible');
+      loginPanel.classList.add('visible');
+    });
+
+    $('li-to-signup').addEventListener('click', () => {
+      loginPanel.classList.remove('visible');
+      signupPanel.classList.add('visible');
+    });
+
+    // Validation
+    const suUser = $('su-username');
+    const suPass = $('su-password');
+    const valAvail = $('val-available');
+    const valAppro = $('val-appropriate');
+    const valLen   = $('val-length');
+    const valPass  = $('val-pass');
+    const suSubmit = $('su-submit');
+
+    function setVal(el, pass) {
+      el.classList.remove('pass', 'fail');
+      el.classList.add(pass ? 'pass' : 'fail');
+    }
+
+    function validateSignup() {
+      const name = suUser.value.trim();
+      const pass = suPass.value;
+      const users = getUsers();
+      const lower = name.toLowerCase();
+
+      const isAvail = name.length > 0 && !users[lower];
+      const isAppro = name.length > 0 && !BAD_WORDS.some(w => lower.includes(w)) && !WEIRD_PATTERN.test(name);
+      const isLen   = name.length >= 5;
+      const isPass  = pass.length >= 8;
+
+      setVal(valAvail, isAvail);
+      setVal(valAppro, isAppro);
+      setVal(valLen, isLen);
+      setVal(valPass, isPass);
+
+      suSubmit.disabled = !(isAvail && isAppro && isLen && isPass);
+    }
+
+    suUser.addEventListener('input', validateSignup);
+    suPass.addEventListener('input', validateSignup);
+
+    // Intercept Signup and Login flows with Plan Picker Modals
+    suSubmit.addEventListener('click', () => {
+      const name = suUser.value.trim();
+      saveUser(name, suPass.value);
+      localStorage.setItem('cinemavpn_session', name);
+      pendingUsername = name;
+      signupPanel.classList.remove('visible');
+      $('premium-prompt-panel').classList.add('visible');
+    });
+
+    $('li-submit').addEventListener('click', () => {
+      const name = $('li-username').value.trim();
+      const pass = $('li-password').value;
+      const users = getUsers();
+      const u = users[name.toLowerCase()];
+
+      if (!u || u.password !== pass) {
+        $('li-error').textContent = 'Invalid username or password.';
+        return;
+      }
+      $('li-error').textContent = '';
+      localStorage.setItem('cinemavpn_session', u.display || name);
+      pendingUsername = u.display || name;
+      loginPanel.classList.remove('visible');
+      $('premium-prompt-panel').classList.add('visible');
+    });
+
+    // Prompt Funnel Handlers
+    $('plan-decline-btn').addEventListener('click', () => {
+       isPremiumAccount = false;
+       $('premium-prompt-panel').classList.remove('visible');
+       goToDashboard(pendingUsername);
+    });
+
+    $('plan-accept-btn').addEventListener('click', () => {
+       triggerPopcornAnimation();
+    });
+
+    // ═══════════════════════════════════════════
+    //  POPCORN ANIMATION ENGINE (Canvas Physics)
+    // ═══════════════════════════════════════════
+    function triggerPopcornAnimation() {
+       const pCanvas = $('popcorn-canvas');
+       pCanvas.classList.remove('hidden');
+       const pCtx = pCanvas.getContext('2d');
+       
+       let pWidth = pCanvas.width = pCanvas.parentElement.clientWidth;
+       let pHeight = pCanvas.height = pCanvas.parentElement.clientHeight;
+       
+       // Physics settings
+       let kernels = [];
+       let boxY = pHeight + 100;
+       let targetBoxY = pHeight - 140;
+       let boxSpeed = 5;
+       let stage = 0; // 0: box entering, 1: explosion, 2: zooming kernel
+       let zoomKernel = null;
+
+       // Build popping simulation
+       for(let i=0; i<60; i++){
+          kernels.push({
+             x: pWidth / 2 + rand(-20, 20),
+             y: targetBoxY + 10,
+             vx: (Math.random() - 0.5) * 12,
+             vy: -rand(8, 22),
+             size: rand(6, 12),
+             rot: Math.random() * Math.PI,
+             rotV: (Math.random() - 0.5) * 0.2,
+             color: ["#fff", "#ffe599", "#fff2cc", "#ffd966"][rand(0,3)]
+          });
+       }
+
+       function updatePopcornPhysics() {
+          pCtx.clearRect(0, 0, pWidth, pHeight);
+
+          // Draw Popcorn container Box
+          if (stage === 0) {
+             boxY -= boxSpeed;
+             if (boxY <= targetBoxY) {
+                boxY = targetBoxY;
+                stage = 1;
+             }
+          }
+
+          pCtx.save();
+          pCtx.translate(pWidth/2, boxY);
+          pCtx.fillStyle = "#ff0040";
+          pCtx.fillRect(-35, 0, 70, 90);
+          pCtx.fillStyle = "#ffffff";
+          pCtx.fillRect(-20, 0, 10, 90);
+          pCtx.fillRect(10, 0, 10, 90);
+          pCtx.font = "bold 10px Arial";
+          pCtx.fillStyle = "#fff";
+          pCtx.textAlign = "center";
+          pCtx.fillText("POPCORN", 0, 45);
+          pCtx.restore();
+
+          if (stage >= 1) {
+             let activeCount = 0;
+             kernels.forEach((k, index) => {
+                k.x += k.vx;
+                k.y += k.vy;
+                k.vy += 0.4; // Gravity
+                k.rot += k.rotV;
+
+                pCtx.save();
+                pCtx.translate(k.x, k.y);
+                pCtx.rotate(k.rot);
+                pCtx.fillStyle = k.color;
+                
+                // Cloud-fluffy popcorn shapes
+                pCtx.beginPath();
+                pCtx.arc(0, 0, k.size, 0, Math.PI*2);
+                pCtx.arc(k.size*0.5, -k.size*0.2, k.size*0.8, 0, Math.PI*2);
+                pCtx.arc(-k.size*0.3, k.size*0.3, k.size*0.7, 0, Math.PI*2);
+                pCtx.fill();
+                pCtx.restore();
+
+                if (k.y < pHeight + 50) activeCount++;
+                
+                // Track candidate for camera target zoom
+                if (index === 15) zoomKernel = k;
+             });
+
+             if (stage === 1 && zoomKernel && zoomKernel.vy > 0) {
+                stage = 2;
+                pCanvas.style.transformOrigin = `${zoomKernel.x}px ${zoomKernel.y}px`;
+                pCanvas.classList.add('zoomed');
+                setTimeout(async () => {
+                   pCtx.clearRect(0, 0, pWidth, pHeight);
+                   pCanvas.classList.add('hidden');
+                   pCanvas.classList.remove('zoomed');
+                   $('premium-prompt-panel').classList.remove('visible');
+                   $('checkout-panel').classList.add('visible');
+                }, 1200);
+             }
+          }
+
+          if (stage < 2 || !pCanvas.classList.contains('hidden')) {
+             requestAnimationFrame(updatePopcornPhysics);
+          }
+       }
+       updatePopcornPhysics();
+    }
+
+    // Fake Gateway Processing Trigger
+    $('pay-submit-btn').addEventListener('click', async () => {
+       $('checkout-panel').classList.remove('visible');
+       $('vpn-loader').classList.add('active');
+       
+       let secondsRemaining = 30;
+       while(secondsRemaining > 0) {
+          $('loader-text').textContent = `PROCESSING TRANSACTION... ${secondsRemaining}s`;
+          await sleep(1000);
+          secondsRemaining--;
+       }
+
+       $('loader-text').textContent = "PREMIUM ACTIVATED SUCCESS!";
+       await sleep(2000);
+       $('vpn-loader').classList.remove('active');
+       
+       isPremiumAccount = true;
+       goToDashboard(pendingUsername);
+    });
+
+    // ═══════════════════════════════════════════
+    //  DASHBOARD CONTROL & INTERFACES
+    // ═══════════════════════════════════════════
+    async function goToDashboard(username) {
+      $('dash-username').textContent = username;
+      $('info-latency').textContent = rand(8, 45) + ' ms';
+      $('info-bw').textContent = rand(800, 999) + ' Mbps';
+
+      if(isPremiumAccount) {
+         $('premium-badge').style.display = "inline-block";
+         $('custom-servers-trigger').classList.remove('hidden');
+         $('info-encryption').textContent = "ULTRA-STEALTH QUANTUM";
+      } else {
+         $('premium-badge').style.display = "none";
+         $('custom-servers-trigger').classList.add('hidden');
+         $('info-encryption').textContent = "AES-256-GCM";
+      }
+
+      $('tv-container').classList.add('leaving');
+      await sleep(800);
+      $('tv-container').classList.add('hidden');
+      $('dashboard').classList.add('active');
+      initPlanet();
+      buildSlogans();
+    }
+
+    // Auto-login if session exists
+    const session = localStorage.getItem('cinemavpn_session');
+    if (session) {
+      $('login-corner-btn').textContent = `Welcome, ${session}`;
+    }
+
+    function buildSlogans() {
+      const track = $('slogan-track');
+      const items = [...SLOGANS, ...SLOGANS];
+      track.innerHTML = items.map(s => `<span class="slogan-item">${s}</span>`).join('');
+    }
+
+    // ═══════════════════════════════════════════
+    //  PLANET (Canvas globe)
+    // ═══════════════════════════════════════════
+    const planetCanvas = $('planet-canvas');
+    const pCtx = planetCanvas.getContext('2d');
+    let planetRotation = 0;
+    let planetSpinning = true;
+    let planetAnimId;
+    let mapImage = null;
+    let currentServer = null;
+    let targetRotation = 0;
+    let vpnActive = false;
+
+    function createFallbackMap() {
+      const off = document.createElement('canvas');
+      off.width = 720; off.height = 360;
+      const octx = off.getContext('2d');
+      octx.fillStyle = '#111';
+      octx.fillRect(0, 0, 720, 360);
+      octx.fillStyle = '#999';
+      [[[60,80],[140,60],[200,70],[220,100],[180,130],[120,140],[70,120]],
+       [[240,70],[310,60],[340,90],[320,130],[260,120]],
+       [[350,60],[420,55],[480,70],[500,100],[460,130],[380,120]],
+       [[480,80],[560,70],[620,90],[640,130],[580,150],[500,130]],
+       [[560,160],[610,150],[640,180],[620,220],[570,230],[540,190]],
+       [[300,150],[370,140],[400,180],[380,230],[320,240],[280,200]],
+       [[120,160],[180,150],[200,200],[170,260],[130,250],[100,200]]].forEach(c => {
+        octx.beginPath(); octx.moveTo(c[0][0], c[0][1]);
+        c.slice(1).forEach(p => octx.lineTo(p[0], p[1]));
+        octx.closePath(); octx.fill();
+      });
+      return off;
+    }
+
+    function loadWorldMap() {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const off = document.createElement('canvas');
+        off.width = img.width; off.height = img.height;
+        const octx = off.getContext('2d');
+        octx.drawImage(img, 0, 0);
+        const id = octx.getImageData(0, 0, off.width, off.height);
+        const d = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const g = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+          d[i] = d[i+1] = d[i+2] = g;
+        }
+        octx.putImageData(id, 0, 0);
+        mapImage = off;
+      };
+      img.onerror = () => { mapImage = createFallbackMap(); };
+      img.src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Equirectangular_projection_SW.jpg/1280px-Equirectangular_projection_SW.jpg';
+    }
+
+    mapImage = createFallbackMap();
+    loadWorldMap();
+
+    function latLonToRotation(lat, lon) {
+      return (-lon * Math.PI / 180);
+    }
+
+    function projectGlobePoint(lat, lon, rot, cx, cy, r) {
+      const phi = (90 - lat) * Math.PI / 180;
+      const theta = (lon * Math.PI / 180) + rot;
+      const x3 = r * Math.sin(phi) * Math.cos(theta);
+      const y3 = r * Math.cos(phi);
+      const z3 = r * Math.sin(phi) * Math.sin(theta);
+      if (z3 < 0) return null;
+      return { x: cx + x3, y: cy - y3, z: z3 };
+    }
+
+    function drawPlanet() {
+      const w = planetCanvas.width, h = planetCanvas.height;
+      const cx = w / 2, cy = h / 2, r = w * 0.38;
+
+      pCtx.clearRect(0, 0, w, h);
+
+      const mw = mapImage.width, mh = mapImage.height;
+      const mapCtx = mapImage.getContext('2d');
+      const mapData = mapCtx.getImageData(0, 0, mw, mh).data;
+      const imgData = pCtx.createImageData(w, h);
+      const data = imgData.data;
+
+      for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+          const dx = px - cx, dy = py - cy;
+          const distSq = dx * dx + dy * dy;
+          if (distSq > r * r) continue;
+
+          const z = Math.sqrt(r * r - distSq);
+          const lon = Math.atan2(dx, z) + planetRotation;
+          const lat = Math.asin(Math.max(-1, Math.min(1, -dy / r)));
+
+          let u = ((lon / Math.PI + 1) / 2) * mw;
+          while (u < 0) u += mw;
+          u = u % mw;
+          const v = Math.max(0, Math.min(mh - 1, (0.5 - lat / Math.PI) * mh));
+
+          const mx = u | 0;
+          const my = v | 0;
+          const mi = (my * mw + mx) * 4;
+          const shade = 0.55 + 0.45 * (z / r);
+          const idx = (py * w + px) * 4;
+
+          data[idx]     = mapData[mi] * shade;
+          data[idx + 1] = mapData[mi + 1] * shade;
+          data[idx + 2] = mapData[mi + 2] * shade;
+          data[idx + 3] = 255;
+        }
+      }
+
+      pCtx.putImageData(imgData, 0, 0);
+
+      pCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+      pCtx.lineWidth = 1;
+      pCtx.beginPath();
+      pCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      pCtx.stroke();
+
+      const atmGrad = pCtx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.06);
+      atmGrad.addColorStop(0, 'transparent');
+      atmGrad.addColorStop(1, 'rgba(255,255,255,0.07)');
+      pCtx.fillStyle = atmGrad;
+      pCtx.beginPath();
+      pCtx.arc(cx, cy, r * 1.06, 0, Math.PI * 2);
+      pCtx.fill();
+
+      if (currentServer && !planetSpinning) {
+        const pt = projectGlobePoint(currentServer.lat, currentServer.lon, planetRotation, cx, cy, r);
+        if (pt) {
+          const pointer = $('server-pointer');
+          const rect = planetCanvas.getBoundingClientRect();
+          const area = planetCanvas.parentElement.getBoundingClientRect();
+          pointer.style.left = (rect.left - area.left + pt.x) + 'px';
+          pointer.style.top  = (rect.top - area.top + pt.y) + 'px';
+        }
+      }
+
+      if (planetSpinning) {
+        planetRotation += 0.005;
+      } else {
+        const diff = targetRotation - planetRotation;
+        if (Math.abs(diff) > 0.002) {
+          planetRotation += diff * 0.04;
+        } else {
+          planetRotation = targetRotation;
+        }
+      }
+
+      planetAnimId = requestAnimationFrame(drawPlanet);
+    }
+
+    function initPlanet() {
+      if (planetAnimId) cancelAnimationFrame(planetAnimId);
+      planetRotation = 0;
+      planetSpinning = true;
+      drawPlanet();
+    }
+
+    // ═══════════════════════════════════════════
+    //  VPN TUNNEL FLOW
+    // ═══════════════════════════════════════════
+    const loader      = $('vpn-loader');
+    const loaderText  = $('loader-text');
+    const statusBanner = $('status-banner');
+    const ipPanel     = $('ip-panel');
+    const startBtn    = $('start-movie-btn');
+    const stopBtn     = $('stop-vpn-btn');
+    const changeBtn   = $('change-server-btn');
+    const cooldownLbl = $('cooldown-label');
+    let lastServerChange = parseInt(localStorage.getItem('cinemavpn_server_change') || '0');
+    let securedIP = '';
+
+    function showStatus(text) {
+      statusBanner.textContent = text;
+      statusBanner.classList.remove('hide');
+      statusBanner.classList.add('show');
+    }
+
+    function hideStatus() {
+      statusBanner.classList.remove('show');
+      statusBanner.classList.add('hide');
+    }
+
+    function pickServer(exclude) {
+      let pool = SERVERS;
+      if (exclude) pool = SERVERS.filter(s => s.name !== exclude.name);
+      return pool[rand(0, pool.length - 1)];
+    }
+
+    async function activateVPN(isServerChange = false, selectedCustomServerObject = null) {
+      vpnActive = true;
+      startBtn.classList.add('hidden');
+      stopBtn.classList.remove('hidden');
+      if(!isPremiumAccount) {
+         changeBtn.classList.remove('hidden');
+         updateCooldownUI();
+      }
+
+      // 3x Faster Connection Optimization logic for Premium Tier accounts
+      let animationSleepDuration = isPremiumAccount ? 240 : 700;
+      let planetRotationDelay = isPremiumAccount ? 1600 : 5000;
+
+      loader.classList.add('active');
+      const loaderMsgs = ['INITIALIZING...', 'SPINNING UP TUNNEL...', 'SECURING PACKETS...'];
+      for (let i = 0; i < loaderMsgs.length; i++) {
+        loaderText.textContent = loaderMsgs[i];
+        await sleep(animationSleepDuration);
+      }
+      loader.classList.remove('active');
+
+      showStatus('YOUR IP IS NOW GETTING SECURED...');
+
+      planetSpinning = true;
+      $('server-pointer').classList.remove('visible');
+      planetCanvas.classList.add('zoomed');
+
+      await sleep(planetRotationDelay);
+
+      if(selectedCustomServerObject) {
+         currentServer = selectedCustomServerObject;
+      } else {
+         currentServer = pickServer(isServerChange ? currentServer : null);
+      }
+      
+      targetRotation = latLonToRotation(currentServer.lat, currentServer.lon);
+      planetSpinning = false;
+
+      await sleep(isPremiumAccount ? 700 : 2000);
+
+      $('server-pointer').classList.add('visible');
+      showStatus(`SERVER LOCKED: ${currentServer.name.toUpperCase()}`);
+
+      await sleep(isPremiumAccount ? 500 : 1500);
+
+      planetCanvas.classList.remove('zoomed');
+      await sleep(isPremiumAccount ? 500 : 1500);
+
+      securedIP = genIP();
+      $('secured-ip').textContent = securedIP;
+      $('server-label').textContent = `Server: ${currentServer.name}`;
+      
+      if(isPremiumAccount) {
+         $('ip-protection-status').textContent = "IP FULLY PROTECTED";
+      } else {
+         $('ip-protection-status').textContent = "YOUR SECURED IP";
+      }
+      
+      ipPanel.classList.add('visible');
+
+      showStatus('MOVIE IS NOW ROLLING — IP SECURED');
+      await sleep(4000);
+      hideStatus();
+    }
+
+    async function deactivateVPN() {
+      vpnActive = false;
+      stopBtn.classList.add('hidden');
+      changeBtn.classList.add('hidden');
+      cooldownLbl.classList.add('hidden');
+      startBtn.classList.remove('hidden');
+      startBtn.textContent = 'Start Movie';
+      ipPanel.classList.remove('visible');
+      $('server-pointer').classList.remove('visible');
+      planetSpinning = true;
+      currentServer = null;
+      hideStatus();
+      showStatus('VPN DISCONNECTED');
+      await sleep(2000);
+      hideStatus();
+    }
+
+    function updateCooldownUI() {
+      if(isPremiumAccount) {
+         changeBtn.disabled = false;
+         cooldownLbl.classList.add('hidden');
+         return;
+      }
+      const now = Date.now();
+      const elapsed = now - lastServerChange;
+      const cooldown = 15 * 60 * 1000;
+
+      if (elapsed >= cooldown) {
+        changeBtn.disabled = false;
+        cooldownLbl.classList.add('hidden');
+      } else {
+        changeBtn.disabled = true;
+        cooldownLbl.classList.remove('hidden');
+        const remaining = Math.ceil((cooldown - elapsed) / 1000);
+        const min = Math.floor(remaining / 60);
+        const sec = remaining % 60;
+        cooldownLbl.textContent = `Available in ${min}:${sec.toString().padStart(2,'0')}`;
+      }
+    }
+
+    setInterval(() => { if (vpnActive) updateCooldownUI(); }, 1000);
+
+    startBtn.addEventListener('click', () => activateVPN(false));
+    stopBtn.addEventListener('click', () => deactivateVPN());
+
+    changeBtn.addEventListener('click', async () => {
+      if(!isPremiumAccount) {
+         const now = Date.now();
+         if (now - lastServerChange < 15 * 60 * 1000) return;
+         lastServerChange = now;
+         localStorage.setItem('cinemavpn_server_change', lastServerChange.toString());
+         changeBtn.disabled = true;
+      }
+
+      showStatus('SWITCHING SERVER...');
+      ipPanel.classList.remove('visible');
+      $('server-pointer').classList.remove('visible');
+
+      await activateVPN(true);
+      updateCooldownUI();
+    });
+
+    // ═══ ADDED: SERVERS LIST GENERATOR MODULES ═══
+    $('custom-servers-trigger').addEventListener('click', () => {
+       const grid = $('server-list-grid');
+       grid.innerHTML = "";
+       EXTENDED_PREMIUM_SERVERS.forEach(srv => {
+          let btn = document.createElement('button');
+          btn.className = "server-item-btn";
+          btn.innerHTML = `<span>${srv.name.split(" ")[0]}</span> <span>${srv.name.split(" ").slice(1).join(" ")}</span>`;
+          btn.addEventListener('click', () => {
+             $('premium-server-modal').classList.add('hidden');
+             ipPanel.classList.remove('visible');
+             activateVPN(false, srv);
+          });
+          grid.appendChild(btn);
+       });
+       $('premium-server-modal').classList.remove('hidden');
+    });
+
+    $('close-premium-modal').addEventListener('click', () => {
+       $('premium-server-modal').classList.add('hidden');
+    });
+
+    // Channel flicker
+    const channels = ['CH 07','CH 13','CH 42','CH 99','CH ∞'];
+    setInterval(() => {
+      if (Math.random() < 0.15) $('channel-ind').textContent = channels[rand(0, channels.length - 1)];
+    }, 2000);
+  </script>
+</body>
+</html>
